@@ -33,6 +33,7 @@ function system(notes, scale, width, current, isOne = false) {
  for(let i=0;i<Math.abs(sig);i++) out+=glyph(sig>0?SHARP_PATH:FLAT_PATH,44+i*9,y(steps[i]),gap);
  const state=new Map(); let firstFingered=true;
  notes.forEach((n,i)=>{
+  if(n.shift)state.clear();
   const x=xAt(i), step=n.dia-24, yy=y(step), color=STRING_COLORS[n.string], prior=state.has(step)?state.get(step):signatureAlter(n.letter,sig);
   const acc=n.alter===prior?'none':names[n.alter]; state.set(step,n.alter);
   out+=`<g data-index="${n.index}" data-accidental="${acc}" data-step="${step}" data-center-x="${x}" data-center-y="${yy}" data-color="${color}">`;
@@ -45,9 +46,17 @@ function system(notes, scale, width, current, isOne = false) {
   else if(acc!=='none')out+=glyph(paths[acc],x-19,yy,gap);
   out+=glyph(NOTEHEAD_PATH,x-6,yy,gap,color);
   out+=`<text data-role="finger" x="${x}" y="${yy-12}" text-anchor="middle" font-weight="700" font-size="12" fill="${color}">${esc(n.place?.short??n.finger)}</text>`;
-  if(n.spacing?.kind==='kuttsuku')out+=`<text x="${x-spacing/2}" y="${Math.min(yy,y(notes[i-1]?.dia-24??step))-24}" text-anchor="middle" font-size="8" font-weight="700">くっつく</text>`;
+  if(n.spacing?.kind==='kuttsuku'){
+   const previous=notes[i-1];
+   const labelX=previous?x-spacing/2:x;
+   const labelY=previous?Math.min(yy,y(previous.dia-24)):yy;
+   out+=`<text x="${labelX}" y="${labelY-24}" text-anchor="middle" font-size="8" font-weight="700">くっつく</text>`;
+  }
   if(n.spacing?.kind==='hikuku')out+=`<text x="${x}" y="${yy-24}" text-anchor="middle" font-size="8" font-weight="700">ひくく</text>`;
-  if(n.index===14)out+=`<path d="M${x+spacing/2} ${bottom-43}V${bottom+3}" stroke="#89938e" stroke-width="1"/>`;
+  if(n.index===14){
+   out+=`<path d="M${x+spacing/2} ${bottom-43}V${bottom+3}" stroke="#89938e" stroke-width="1"/>`;
+   state.clear();
+  }
   out+='</g>';
  });
  return out+'</svg>';

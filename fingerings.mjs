@@ -53,6 +53,6 @@ const T={
 };
 const SI={C:0,G:1,D:2,A:3};
 const parse=t=>{const m=/^([CGDA])([0-4])@(\d+)$/.exec(t);if(!m)throw new Error('運指の字 '+t);return {s:SI[m[1]],f:+m[2],p:+m[3]};};
-export const FINGERING_SOURCE='第1ポジションで弦を渡り、A線はフレッシュの「1-2-移動-1-2」。下行は同じ道（本の運指の写しではない）';
+export const FINGERING_SOURCE='第1ポジション（シ♭・シで始まる調は第2ポジション）で弦を渡り、A線はフレッシュの「1-2-移動-1-2」。下行は同じ道（旋律的短音階の下行は自然的短音階の道）。本の運指の写しではない';
 export const FINGERINGS=Object.fromEntries(Object.entries(T).map(([k,v])=>{const up=v.trim().split(/\s+/).map(parse);if(up.length!==15)throw new Error(k+' は15音でない');return [k,{up}];}));
 export const fingeringFor=(form,id)=>{const up=FINGERINGS[(form==='natural'?'melodicDown':form)+'-'+id];if(!up)return null;const down=form==='melodic'?FINGERINGS['melodicDown-'+id]:up;return {up:up.up,down:down.up};};

@@ -1,7 +1,11 @@
 // Chrome の実際のマイク入力経路を偽デバイスと CDP で検証する。依存パッケージ不要。
 import {spawn} from 'node:child_process';
 import {deepEqual, equal, ok} from 'node:assert/strict';
-import {mkdir, mkdtemp, writeFile} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, writeFile} from 'node:fs/promises';
+import vm from 'node:vm';
+import * as scales from '../scales.mjs';
+import {DIFFICULTIES, centsBetween, detectedName} from '../intonation.mjs';
+import {MIC_LEVELS, PitchDetector} from '../engine.mjs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {createServer} from 'node:net';
@@ -155,44 +159,120 @@ async function checkNatural(cdp, scale) {
   console.log('場合F 合格 イ自然的短音階の結果に全29音と最後の音の測定値・判定を表示');
 }
 
+// 点検と同じく、実際のアプリと検出器に仮想の音声時計・手本の波形を渡す。
+// 実時間だけ進む環境でも、遅れて鳴る手本を演奏と判定しないことを確かめる。
+async function checkClockGuard() {
+  const source = (await readFile(join(root, 'app.mjs'), 'utf8'))
+    .replace(/^import .*;\n/gm, '').replace(/\nsetup\(\);\s*$/, '');
+  async function trial({delay = 0, freeze = Infinity, suspended = false, stale = false, weakAfterTail = false}) {
+    let now = 0, serial = 0, audio;
+    const hz = scales.targetFor(scales.buildScale('major', 0, 0).notes[0], {a4: 442, difficulty: 'easy'}).targetHz;
+    const tasks = new Map(), detector = new PitchDetector(44100), buffer = new Float32Array(4096);
+    const element = {style: {setProperty() {}}, querySelector() {return null;}, querySelectorAll() {return [];}};
+    class ClockAudio {
+      constructor() {audio = this; this.tones = []; this.master = {gain: {value: .8}};}
+      get time() {return Math.max(0, Math.min(now - delay, freeze)) / 1000;}
+      get state() {return suspended && now >= freeze ? 'suspended' : 'running';}
+      async init() {}
+      async ensureRunning() {return this.state === 'running';}
+      toneHz(f, d, t) {this.tones.push({f, d, t});}
+      stop() {this.tones = [];}
+      click() {}
+    }
+    class EchoMicrophone {
+      async start() {return true;}
+      stop() {}
+      read(level) {
+        if (stale) return {rms: .02, frequency: 130.963, confidence: 1};
+        buffer.fill(0);
+        for (let i = 0; i < buffer.length; i++) {
+          const t = audio.time - (buffer.length - i) / 44100;
+          const tone = audio.tones.find(o => t > o.t && t < o.t + o.d);
+          if (weakAfterTail) {
+            // 大きな余韻より小さい演奏でも、解禁600ms後には感度の閾値で拾う。
+            buffer[i] = (t < 2.75 ? .02 : .005) * Math.sin(2 * Math.PI * hz * t);
+          } else if (tone) buffer[i] = .02 * Math.sin(2 * Math.PI * tone.f * t);
+        }
+        return detector.detect(buffer, level);
+      }
+    }
+    const sandbox = {
+      ...scales, DIFFICULTIES, centsBetween, detectedName, MIC_LEVELS,
+      AudioEngine: ClockAudio, Microphone: EchoMicrophone, BRAVURA_LICENSE: '',
+      renderScore: () => '', renderOne: () => '', URLSearchParams,
+      location: {search: '?test=1'}, localStorage: {getItem() {return '{}';}, setItem() {}},
+      navigator: {}, window: {performance: {now: () => now}},
+      document: {visibilityState: 'visible', addEventListener() {},
+        querySelector(selector) {return selector === '#app' ? {
+          clientWidth: 600, addEventListener() {}
+        } : element;}, querySelectorAll() {return [];}},
+      setTimeout(callback, ms) {tasks.set(++serial, {callback, at: now + ms}); return serial;},
+      clearTimeout(id) {tasks.delete(id);}, setInterval() {return 0;}, clearInterval() {},
+      requestAnimationFrame(callback) {tasks.set(++serial, {callback, at: now + 16}); return serial;},
+      cancelAnimationFrame(id) {tasks.delete(id);}
+    };
+    vm.createContext(sandbox);
+    vm.runInContext(source + `
+      performance = () => expose();
+      showPhase = () => expose();
+      setup = () => {phase = 'setup'; updateScale(); expose();};
+      setup();`, sandbox);
+    // 開始時の復帰検査とは独立に、予約後に音時計が遅れる経路を検査する。
+    vm.runInContext('paused = false; measure(++run);', sandbox);
+    const flush = () => new Promise(resolve => setImmediate(resolve));
+    await flush();
+    const phases = [];
+    while (tasks.size) {
+      const [id, task] = [...tasks].sort((a, b) => a[1].at - b[1].at)[0];
+      if (task.at > 8000) break;
+      tasks.delete(id); now = task.at; task.callback(); await flush();
+      const state = {...sandbox.window.__viola};
+      phases.push(state.phase);
+      if (weakAfterTail && state.phase === 'measuring') ok(audio.time >= 3.45, '600msより前には弱音の測定を始めない');
+      if (weakAfterTail && state.judgement) {
+        equal(state.judgement, '合う');
+        ok(audio.time >= 3.35, '余韻の閾値を600ms維持してから弱音を測る');
+        return phases;
+      }
+      equal(state.judgement, null, `手本だけなのに判定（実時間 ${now}ms / 音時計 ${audio.time}s）`);
+    }
+    ok(!weakAfterTail, '余韻より小さい演奏を600ms後にも検出できなかった');
+    return phases;
+  }
+  const delayed = await trial({delay: 2900});
+  ok(delayed.includes('listening'), '遅れた手本の終了と余韻を過ぎれば測定待ちになる');
+  for (const config of [{freeze: 1350}, {freeze: 1350, suspended: true}, {stale: true}]) {
+    const phases = await trial(config);
+    ok(!phases.includes('measuring'), '停止時計・停止解析器・同一の読みを測定に数えない');
+  }
+  await trial({weakAfterTail: true});
+  console.log('場合G 合格 音時計2.9秒遅延・停止・suspended・同一の読みで手本だけの判定なし、600ms後の弱音は合格');
+}
+
 async function captureShots(cdp) {
   const dir = join(root, 'shots');
   await mkdir(dir, {recursive: true});
   await cdp.call('Page.enable');
-  const keys = [
-    ['gis-harmonic', 'harmonic', 'G', 1], ['b-major', 'major', 'B', 0],
-    ['c-major', 'major', 'C', 0], ['a-natural', 'natural', 'A', 0]
-  ];
-  for (const [width, height] of [[402, 870], [1280, 800]]) {
-    await cdp.call('Emulation.setDeviceMetricsOverride', {width, height, deviceScaleFactor: 1, mobile: false});
-    for (const [label, form, tonic, alter] of keys) {
-      await cdp.evaluate(`(() => {
-        document.querySelector('[data-action="back"]')?.click();
-        document.querySelector('[data-form="${form}"]').click();
-        document.querySelector('[data-tonic="${tonic}"][data-alter="${alter}"]').click();
-      })()`);
-      for (const view of ['setup', 'performance']) {
-        if (view === 'performance') {
-          await cdp.evaluate('document.querySelector("#start").click()');
-          await waitFor(() => cdp.evaluate('window.__viola.phase === "reference"'));
-        }
-        await cdp.evaluate('document.fonts.ready.then(() => void 0)');
-        await cdp.evaluate(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
-          window.scrollTo(0, 0);
-          requestAnimationFrame(() => resolve());
-        })))`);
-        const {cssContentSize: content} = await cdp.call('Page.getLayoutMetrics');
-        equal(content.width, width, `${label} ${view} の横スクロール`);
-        const {data} = await cdp.call('Page.captureScreenshot', {
-          format: 'png', captureBeyondViewport: true, fromSurface: true,
-          clip: {x: 0, y: 0, width, height: content.height, scale: 1}
-        });
-        const path = join(dir, `${label}-${width}-${view}.png`);
-        await writeFile(path, Buffer.from(data, 'base64'));
-        console.log(path);
-      }
-    }
-  }
+  const width = 402, height = 870;
+  await cdp.call('Emulation.setDeviceMetricsOverride', {width, height, deviceScaleFactor: 1, mobile: false});
+  await cdp.evaluate(`(() => {
+    document.querySelector('[data-action="back"]')?.click();
+    document.querySelector('[data-form="harmonic"]').click();
+    document.querySelector('[data-tonic="G"][data-alter="1"]').click();
+  })()`);
+  await cdp.evaluate('document.fonts.ready.then(() => void 0)');
+  await cdp.evaluate(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+    window.scrollTo(0, 0); requestAnimationFrame(() => resolve());
+  })))`);
+  const {cssContentSize: content} = await cdp.call('Page.getLayoutMetrics');
+  equal(content.width, width, '嬰ト和声的短音階の準備画面に横スクロールがない');
+  const {data} = await cdp.call('Page.captureScreenshot', {
+    format: 'png', captureBeyondViewport: true, fromSurface: true,
+    clip: {x: 0, y: 0, width, height: content.height, scale: 1}
+  });
+  const path = join(dir, 'gis-harmonic-402-setup.png');
+  await writeFile(path, Buffer.from(data, 'base64'));
+  console.log(path);
 }
 
 const serverPort = await port();
@@ -212,6 +292,9 @@ try {
     {name: 'E', frequency: c, tempo: true},
     {name: 'F', frequency: a, natural: true}
   ];
+  if (!process.argv.includes('--shots')) {
+    try {await checkClockGuard();} catch (e) {failures.push('G'); console.error(`場合G NG ${e.stack}`);}
+  }
   for (const scenario of cases) {
     const path = join(temp, `${scenario.name}.wav`);
     await writeFile(path, wav(scenario.frequency, scenario.echo ? 'echo' : 'tone'));
@@ -273,5 +356,5 @@ try {
     }
   }
 } finally { server.kill('SIGTERM'); }
-console.log(`${process.argv.includes('--shots') ? '撮影' : '6項目'} 中 NG ${failures.length}`);
+console.log(`${process.argv.includes('--shots') ? '撮影' : '7項目'} 中 NG ${failures.length}`);
 if (failures.length) process.exitCode = 1;

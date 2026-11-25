@@ -142,7 +142,7 @@ export function annotate(notes){
   const semiFromTonic0=mod12(n.midi-n.key.tonicPitchClass);
   n.tendency=intervalCentsFromET(semiFromTonic0).pyth;
   if(n.finger===0)hints.push({kind:'open',text:'開放弦（Aから純正5度で調弦した高さ）'});
-  else if(semiFromTonic0===0)hints.push({kind:'tonic',text:n.index===0?'主音: ここが音階の土台':'主音: 最初の主音とオクターブで合わせる'});
+  else if(semiFromTonic0===0)hints.push({kind:'tonic',text:n.index===0?'主音: ここが音階の土台':n.index===28?'主音: 最初の主音と同じ高さに戻る':'主音: 最初の主音とオクターブで合わせる'});
   else{const c=n.tendency,v=Math.round(Math.abs(c));
    const iv=['','短2度','長2度','短3度','長3度','完全4度','増4度','完全5度','短6度','長6度','短7度','長7度'][semiFromTonic0];
    if(c>=5)hints.push({kind:'high',text:`音程は高め: 主音からの${iv}を平均律より+${v}¢広く`});

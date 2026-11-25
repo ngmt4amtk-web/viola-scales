@@ -2,7 +2,8 @@
 // もう一度流すと fingerings.mjs を書き直すので、手で直した後は別名に出して見比べる: node tools/gen_fingerings.mjs /tmp/x.mjs
 //
 // 型（2026-11-26 決定。フレッシュ・小野アンナの本の運指の写しではない。本はこの機械に無い）:
-// 1. 第1ポジションから始め、C・G・D線はそのポジションのまま弦を渡る（シ♭・シで始まる調だけ、主音を1の指で取る第2ポジションから）。
+// 1. 第1ポジションから始め、C・G・D線はそのポジションのまま弦を渡る（シ♭・シで始まる調だけ、主音を1の指で取る第2ポジションから。
+//    第2ポジションでは4の指が次の弦の開放弦より1音上まで届く＝G線のE♭4・E4）。
 //    1本の弦に、そのポジションで届く音を4つまで置く（4の指は次の弦の開放弦と同じ音まで）。開放弦は、主音がド・ソの時と、
 //    1本の弦に収まらない音が次の弦の開放弦に当たる時だけ（例 ホ長調・ホ短調・嬰ヘ短調の途中のA線やD線の開放弦）。
 //    出典: tonebase のビオラ音階ガイド（ド線から1の指で始まる調は2オクターブの途中で移動が要らない）
@@ -94,6 +95,6 @@ for(const kind of ['major','harmonic','melodic','melodicDown'])for(const [L,a] o
  const letters=Array.from({length:15},(_,i)=>(letter+i)%7);
  src+=` '${kind}-${L}${a<0?'b':a>0?'s':''}':'${plan(midis,letters).map(tok).join(' ')}',\n`;
 }
-src+=`};\nconst SI={C:0,G:1,D:2,A:3};\nconst parse=t=>{const m=/^([CGDA])([0-4])@(\\d+)$/.exec(t);if(!m)throw new Error('運指の字 '+t);return {s:SI[m[1]],f:+m[2],p:+m[3]};};\nexport const FINGERING_SOURCE='第1ポジションで弦を渡り、A線はフレッシュの「1-2-移動-1-2」。下行は同じ道（本の運指の写しではない）';\nexport const FINGERINGS=Object.fromEntries(Object.entries(T).map(([k,v])=>{const up=v.trim().split(/\\s+/).map(parse);if(up.length!==15)throw new Error(k+' は15音でない');return [k,{up}];}));\nexport const fingeringFor=(form,id)=>{const up=FINGERINGS[(form==='natural'?'melodicDown':form)+'-'+id];if(!up)return null;const down=form==='melodic'?FINGERINGS['melodicDown-'+id]:up;return {up:up.up,down:down.up};};\n`;
+src+=`};\nconst SI={C:0,G:1,D:2,A:3};\nconst parse=t=>{const m=/^([CGDA])([0-4])@(\\d+)$/.exec(t);if(!m)throw new Error('運指の字 '+t);return {s:SI[m[1]],f:+m[2],p:+m[3]};};\nexport const FINGERING_SOURCE='第1ポジション（シ♭・シで始まる調は第2ポジション）で弦を渡り、A線はフレッシュの「1-2-移動-1-2」。下行は同じ道（旋律的短音階の下行は自然的短音階の道）。本の運指の写しではない';\nexport const FINGERINGS=Object.fromEntries(Object.entries(T).map(([k,v])=>{const up=v.trim().split(/\\s+/).map(parse);if(up.length!==15)throw new Error(k+' は15音でない');return [k,{up}];}));\nexport const fingeringFor=(form,id)=>{const up=FINGERINGS[(form==='natural'?'melodicDown':form)+'-'+id];if(!up)return null;const down=form==='melodic'?FINGERINGS['melodicDown-'+id]:up;return {up:up.up,down:down.up};};\n`;
 writeFileSync(process.argv[2]||new URL('../fingerings.mjs',import.meta.url),src);
 console.log(src.split('\n').filter(l=>l.startsWith(" '")).join('\n'));

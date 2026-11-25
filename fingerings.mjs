@@ -1,0 +1,58 @@
+// ビオラ2オクターブ音階の運指（上行15音。下行は上行を逆にたどる）。tools/gen_fingerings.mjs が作った表。
+// 1音 = 弦 指 @ ポジション（0は開放弦）。例 A1@3 = A線・1の指・第3ポジション。手で直す時はこの行を直す。
+// 型の決め方と出典は tools/gen_fingerings.mjs の頭に書いた。
+const T={
+ 'major-C':'C0@0 C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1',
+ 'major-Db':'C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A3@1',
+ 'major-D':'C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A3@1',
+ 'major-Eb':'C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3',
+ 'major-E':'C2@1 C3@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A0@0 A1@1 A2@1 A1@3 A2@3',
+ 'major-F':'C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A3@3',
+ 'major-Fs':'C3@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@2 A2@2 A3@2 A4@2',
+ 'major-G':'G0@0 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A3@3 A4@3',
+ 'major-Ab':'G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A1@5 A2@5 A3@5',
+ 'major-A':'G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A1@5 A2@5 A3@5',
+ 'major-Bb':'G1@2 G2@2 G3@2 G4@2 D1@2 D2@2 D3@2 D4@2 A1@2 A2@2 A1@4 A2@4 A1@6 A2@6 A3@6',
+ 'major-B':'G1@2 G2@2 G3@2 G4@2 D1@2 D2@2 D3@2 D4@2 A1@2 A2@2 A1@4 A2@4 A1@6 A2@6 A3@6',
+ 'harmonic-C':'C0@0 C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1',
+ 'harmonic-Cs':'C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A0@0 A2@1 A3@1',
+ 'harmonic-D':'C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A3@1',
+ 'harmonic-Eb':'C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3',
+ 'harmonic-E':'C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 D1@1 D2@1 D3@1 D4@1 A0@0 A1@1 A2@1 A1@3 A2@3',
+ 'harmonic-F':'C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A3@3',
+ 'harmonic-Fs':'C3@1 G1@1 G2@1 G3@1 G4@1 D0@0 D2@1 D3@1 D4@1 A0@0 A1@1 A2@1 A1@3 A2@3 A3@3',
+ 'harmonic-G':'G0@0 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A3@3 A4@3',
+ 'harmonic-Gs':'G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@2 A2@2 A1@4 A2@4 A3@4',
+ 'harmonic-A':'G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A1@5 A2@5 A3@5',
+ 'harmonic-Bb':'G1@2 G2@2 G3@2 G4@2 D1@2 D2@2 D3@2 D4@2 A1@2 A2@2 A1@4 A2@4 A1@6 A2@6 A3@6',
+ 'harmonic-B':'G1@2 G2@2 G3@2 G4@2 D1@2 D2@2 D3@2 D4@2 A1@2 A2@2 A1@4 A2@4 A1@6 A2@6 A3@6',
+ 'melodic-C':'C0@0 C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1',
+ 'melodic-Cs':'C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A3@1',
+ 'melodic-D':'C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A3@1',
+ 'melodic-Eb':'C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3',
+ 'melodic-E':'C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 D1@1 D2@1 D3@1 D4@1 A0@0 A1@1 A2@1 A1@3 A2@3',
+ 'melodic-F':'C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A3@3',
+ 'melodic-Fs':'C3@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A0@0 A1@1 A2@1 A1@3 A2@3 A3@3',
+ 'melodic-G':'G0@0 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A3@3 A4@3',
+ 'melodic-Gs':'G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@2 A2@2 A1@4 A2@4 A3@4',
+ 'melodic-A':'G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A1@5 A2@5 A3@5',
+ 'melodic-Bb':'G1@2 G2@2 G3@2 G4@2 D1@2 D2@2 D3@2 D4@2 A1@2 A2@2 A1@4 A2@4 A1@6 A2@6 A3@6',
+ 'melodic-B':'G1@2 G2@2 G3@2 G4@2 D1@2 D2@2 D3@2 D4@2 A1@2 A2@2 A1@4 A2@4 A1@6 A2@6 A3@6',
+ 'melodicDown-C':'C0@0 C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1',
+ 'melodicDown-Cs':'C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A0@0 A1@1 A2@1',
+ 'melodicDown-D':'C1@1 C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A3@1',
+ 'melodicDown-Eb':'C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3',
+ 'melodicDown-E':'C2@1 C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3',
+ 'melodicDown-F':'C3@1 C4@1 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A3@3',
+ 'melodicDown-Fs':'C3@1 G1@1 G2@1 G3@1 G4@1 D0@0 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A3@3',
+ 'melodicDown-G':'G0@0 G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A3@3 A4@3',
+ 'melodicDown-Gs':'G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@2 A2@2 A1@4 A2@4 A3@4',
+ 'melodicDown-A':'G1@1 G2@1 G3@1 G4@1 D1@1 D2@1 D3@1 D4@1 A1@1 A2@1 A1@3 A2@3 A1@5 A2@5 A3@5',
+ 'melodicDown-Bb':'G1@2 G2@2 G3@2 G4@2 D1@2 D2@2 D3@2 D4@2 A1@2 A2@2 A1@4 A2@4 A1@6 A2@6 A3@6',
+ 'melodicDown-B':'G1@2 G2@2 G3@2 G4@2 D1@2 D2@2 D3@2 D4@2 A1@2 A2@2 A1@4 A2@4 A1@6 A2@6 A3@6',
+};
+const SI={C:0,G:1,D:2,A:3};
+const parse=t=>{const m=/^([CGDA])([0-4])@(\d+)$/.exec(t);if(!m)throw new Error('運指の字 '+t);return {s:SI[m[1]],f:+m[2],p:+m[3]};};
+export const FINGERING_SOURCE='第1ポジションで弦を渡り、A線はフレッシュの「1-2-移動-1-2」。下行は同じ道（本の運指の写しではない）';
+export const FINGERINGS=Object.fromEntries(Object.entries(T).map(([k,v])=>{const up=v.trim().split(/\s+/).map(parse);if(up.length!==15)throw new Error(k+' は15音でない');return [k,{up}];}));
+export const fingeringFor=(form,id)=>{const up=FINGERINGS[(form==='natural'?'melodicDown':form)+'-'+id];if(!up)return null;const down=form==='melodic'?FINGERINGS['melodicDown-'+id]:up;return {up:up.up,down:down.up};};

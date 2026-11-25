@@ -6,11 +6,11 @@
 //    第2ポジションでは4の指が次の弦の開放弦より1音上まで届く＝G線のE♭4・E4）。
 //    1本の弦に、そのポジションで届く音を4つまで置く（4の指は次の弦の開放弦と同じ音まで）。開放弦は、主音がド・ソの時と、
 //    1本の弦に収まらない音が次の弦の開放弦に当たる時だけ（例 ホ長調・ホ短調・嬰ヘ短調の途中のA線やD線の開放弦）。
-//    出典: tonebase のビオラ音階ガイド（ド線から1の指で始まる調は2オクターブの途中で移動が要らない）
+//    出典: tonebase のビオラ音階ガイド（ド線から1の指で始まる調は2オクターブの途中で移動が要らない。検索結果の抜粋のみで本体は未照合）
 // 2. A線では、フレッシュの上の弦の型「1-2-移動-1-2」で上がる（2→1で移動）。
 //    A線の音が4つ以上なら2つずつの組に分け（4音でも分ける。ミ♭・ミの調は届くが移動を入れる）、最後の組だけ2〜4音にする。
 //    A線が5音以上なら最後の組は3か4音。A線が3音以下なら移動しない（ド・レ♭・レの長調、ド・ド♯・レの短調）。
-//    出典: violinist.com の Mark Rush のブログが伝える Flesch の E線の型（バイオリン）
+//    出典: violinist.com の Mark Rush のブログが Flesch の E線の型として書く、と検索結果の抜粋にある（2026-11-26 にページ本体は読めず未照合）
 // 3. 下行は上行と同じ道を戻る（Cora Cooper の運指表で長調は「下行も同じ」）。旋律的短音階の下行は6・7度が下がるので、
 //    自然的短音階を同じ型で作った道（melodicDown-）を逆にたどる（Cooper の表でも旋律的短音階は上下で運指が違う）。
 // ポジションの番号は、1の指の音名が開放弦から何度上か（A線でD＝第3ポジション）。C・G・D線は全部第1ポジション。
@@ -95,6 +95,6 @@ for(const kind of ['major','harmonic','melodic','melodicDown'])for(const [L,a] o
  const letters=Array.from({length:15},(_,i)=>(letter+i)%7);
  src+=` '${kind}-${L}${a<0?'b':a>0?'s':''}':'${plan(midis,letters).map(tok).join(' ')}',\n`;
 }
-src+=`};\nconst SI={C:0,G:1,D:2,A:3};\nconst parse=t=>{const m=/^([CGDA])([0-4])@(\\d+)$/.exec(t);if(!m)throw new Error('運指の字 '+t);return {s:SI[m[1]],f:+m[2],p:+m[3]};};\nexport const FINGERING_SOURCE='第1ポジション（シ♭・シで始まる調は第2ポジション）で弦を渡り、A線はフレッシュの「1-2-移動-1-2」。下行は同じ道（旋律的短音階の下行は自然的短音階の道）。本の運指の写しではない';\nexport const FINGERINGS=Object.fromEntries(Object.entries(T).map(([k,v])=>{const up=v.trim().split(/\\s+/).map(parse);if(up.length!==15)throw new Error(k+' は15音でない');return [k,{up}];}));\nexport const fingeringFor=(form,id)=>{const up=FINGERINGS[(form==='natural'?'melodicDown':form)+'-'+id];if(!up)return null;const down=form==='melodic'?FINGERINGS['melodicDown-'+id]:up;return {up:up.up,down:down.up};};\n`;
+src+=`};\nconst SI={C:0,G:1,D:2,A:3};\nconst parse=t=>{const m=/^([CGDA])([0-4])@(\\d+)$/.exec(t);if(!m)throw new Error('運指の字 '+t);return {s:SI[m[1]],f:+m[2],p:+m[3]};};\nexport const FINGERING_SOURCE='第1ポジション（シ♭・シで始まる調は第2ポジション）で弦を渡り、A線はフレッシュの型とされる「1-2-移動-1-2」（原典と未照合）。下行は同じ道（旋律的短音階の下行は自然的短音階の道）。本の運指の写しではない';\nexport const FINGERINGS=Object.fromEntries(Object.entries(T).map(([k,v])=>{const up=v.trim().split(/\\s+/).map(parse);if(up.length!==15)throw new Error(k+' は15音でない');return [k,{up}];}));\nexport const fingeringFor=(form,id)=>{const up=FINGERINGS[(form==='natural'?'melodicDown':form)+'-'+id];if(!up)return null;const down=form==='melodic'?FINGERINGS['melodicDown-'+id]:up;return {up:up.up,down:down.up};};\n`;
 writeFileSync(process.argv[2]||new URL('../fingerings.mjs',import.meta.url),src);
 console.log(src.split('\n').filter(l=>l.startsWith(" '")).join('\n'));

@@ -38,10 +38,18 @@ function wav(frequency, kind) {
   out.writeUInt32LE(16, 16); out.writeUInt16LE(1, 20); out.writeUInt16LE(1, 22);
   out.writeUInt32LE(rate, 24); out.writeUInt32LE(rate * 2, 28); out.writeUInt16LE(2, 32);
   out.writeUInt16LE(16, 34); out.write('data', 36); out.writeUInt32LE(samples * 2, 40);
+  let seed = 123456789;
   for (let i = 0; i < samples; i++) {
     const t = i / rate, active = kind === 'echo' ? t < 2.4 : t >= 3.05;
     const phase = 2 * Math.PI * frequency * t;
-    const signal = active ? .30 * (Math.sin(phase) + .35 * Math.sin(phase * 2) + .16 * Math.sin(phase * 3)) : 0;
+    // 固定シードで、毎回同じ白色雑音を実際のマイク経路に渡す。
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    const signal = kind === 'noise'
+      ? .02 * Math.sin(2 * Math.PI * 100 * t) + .02 * Math.sin(2 * Math.PI * 150 * t) + .01 * (2 * seed / 2 ** 32 - 1)
+      : !active ? 0 : kind === 'harmonics'
+        // 3倍音の位相を反転し、指定振幅のまま16bitの範囲に収める。
+        ? .05 * Math.sin(phase) + .5 * Math.sin(phase * 2) - .4 * Math.sin(phase * 3) + .2 * Math.sin(phase * 4)
+        : .30 * (Math.sin(phase) + .35 * Math.sin(phase * 2) + .16 * Math.sin(phase * 3));
     out.writeInt16LE(Math.round(signal * 32767), 44 + 2 * i);
   }
   return out;
@@ -290,14 +298,17 @@ try {
     {name: 'C', frequency: c, echo: true},
     {name: 'D', frequency: d, expected: '合う', cents: 0, tonic: 'D'},
     {name: 'E', frequency: c, tempo: true},
-    {name: 'F', frequency: a, natural: true}
+    {name: 'F', frequency: a, natural: true},
+    {name: 'H', frequency: c, noise: true},
+    {name: 'I-C', frequency: c, harmonics: true, expected: '合う', cents: 0, tolerance: 5},
+    {name: 'I-D', frequency: d, harmonics: true, expected: '合う', cents: 0, tolerance: 5, tonic: 'D'}
   ];
   if (!process.argv.includes('--shots')) {
     try {await checkClockGuard();} catch (e) {failures.push('G'); console.error(`場合G NG ${e.stack}`);}
   }
   for (const scenario of cases) {
     const path = join(temp, `${scenario.name}.wav`);
-    await writeFile(path, wav(scenario.frequency, scenario.echo ? 'echo' : 'tone'));
+    await writeFile(path, wav(scenario.frequency, scenario.echo ? 'echo' : scenario.noise ? 'noise' : scenario.harmonics ? 'harmonics' : 'tone'));
     const debugPort = await port();
     const browser = spawn(chrome, [
       '--headless=new', '--no-sandbox', '--no-first-run', '--no-default-browser-check', '--disable-background-timer-throttling',
@@ -327,7 +338,20 @@ try {
         await waitFor(() => cdp.evaluate('document.querySelector("#phase")?.textContent.includes("お手本のあとに弾いてください")'), 3200);
         await waitFor(() => cdp.evaluate('document.querySelector("#phase")?.textContent.includes("測っています")'), 2200);
       }
-      if (scenario.echo) {
+      if (scenario.noise) {
+        await waitFor(() => cdp.evaluate('window.__viola.phase === "listening"'));
+        const until = Date.now() + 10000;
+        // 最後の状態だけでなく、途中の判定・自動進行も検出する。
+        while (true) {
+          const state = await cdp.evaluate('({...window.__viola})');
+          equal(state.judgement, null, `雑音だけで判定が出た: ${JSON.stringify(state)}`);
+          equal(state.index, 0, `雑音だけで次へ進んだ: ${JSON.stringify(state)}`);
+          ok(state.reading?.rms > .001, '偽マイクから雑音が届いている');
+          if (Date.now() >= until) break;
+          await sleep(80);
+        }
+        console.log('場合H 合格 雑音だけで10秒間、判定なし・音の番号0');
+      } else if (scenario.echo) {
         await sleep(6000);
         const state = await cdp.evaluate('({...window.__viola})');
         if (state.judgement != null && state.judgement !== '') throw new Error(`判定が出た: ${JSON.stringify(state)}`);
@@ -341,8 +365,9 @@ try {
           const debug = await cdp.evaluate('({state:{...window.__viola}, text:document.querySelector("#phase")?.textContent, error:document.querySelector(".error")?.textContent, level:document.querySelector("#level")?.style.width})');
           throw new Error(`${e.message} ${JSON.stringify(debug)} ${cdp.exceptions.join('; ')}`);
         }
-        if (state.judgement !== scenario.expected || !Number.isFinite(state.lastCents) || Math.abs(state.lastCents - scenario.cents) > 3) {
-          throw new Error(`期待 ${scenario.expected} ${scenario.cents}±3¢、実際 ${JSON.stringify(state)}`);
+        const tolerance = scenario.tolerance ?? 3;
+        if (state.judgement !== scenario.expected || !Number.isFinite(state.lastCents) || Math.abs(state.lastCents - scenario.cents) > tolerance) {
+          throw new Error(`期待 ${scenario.expected} ${scenario.cents}±${tolerance}¢、実際 ${JSON.stringify(state)}`);
         }
         console.log(`場合${scenario.name} 合格 ${state.judgement} ${state.lastCents.toFixed(1)}¢`);
       }
@@ -356,5 +381,5 @@ try {
     }
   }
 } finally { server.kill('SIGTERM'); }
-console.log(`${process.argv.includes('--shots') ? '撮影' : '7項目'} 中 NG ${failures.length}`);
+console.log(`${process.argv.includes('--shots') ? '撮影' : '10項目（Iは2調）'} 中 NG ${failures.length}`);
 if (failures.length) process.exitCode = 1;

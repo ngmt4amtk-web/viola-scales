@@ -374,6 +374,7 @@ try {
     {name: 'E', frequency: c, tempo: true},
     {name: 'F', frequency: a, natural: true},
     {name: 'H', frequency: c, noise: true},
+    {name: 'M', frequency: c, scoreFlow: true},
     {name: 'I-C', frequency: c, harmonics: true, expected: '合う', cents: 0, tolerance: 5},
     {name: 'I-D', frequency: d, harmonics: true, expected: '合う', cents: 0, tolerance: 5, tonic: 'D'}
   ];
@@ -418,6 +419,17 @@ try {
       if (scenario.shots) { await captureShots(cdp); continue; }
       if (scenario.tempo) { await checkTempo(cdp); continue; }
       if (scenario.natural) { await checkNatural(cdp, natural); continue; }
+      if (scenario.scoreFlow) {
+        // 本物の AudioEngine でピロン（success）を鳴らす。ド3を弾き続けるので、1音目が合ってピロン→2音目は前の音として測らない
+        await cdp.evaluate(`document.querySelector('[data-view="score"]').click(); document.querySelector('#start').click()`);
+        await waitFor(() => cdp.evaluate('window.__viola.index === 1'), 8000);
+        await sleep(3000);
+        const st = await cdp.evaluate('({...window.__viola})');
+        equal(st.index, 1, '前の音を弾き続けて先へ進んだ'); equal(st.phase, 'listening');
+        equal(cdp.exceptions.length, 0, `ピロンの経路で例外: ${cdp.exceptions.join('; ')}`);
+        console.log('場合M 合格 本物の音の部品で全体の楽譜: お手本なしで合う→ピロン→次の音、例外なし、前の音では進まない');
+        continue;
+      }
       if (scenario.tonic) await cdp.evaluate(`document.querySelector('[data-tonic="${scenario.tonic}"][data-alter="0"]').click()`);
       if (scenario.name === 'B') await cdp.evaluate(`(() => {const x = document.querySelector('[data-setting="advance"]'); x.value = 'repeat'; x.dispatchEvent(new Event('change', {bubbles: true}));})()`); // 設定「合うまで同じ音」
       if (scenario.name === 'A') await cdp.call('Emulation.setDeviceMetricsOverride', {width:390,height:844,deviceScaleFactor:1,mobile:false}); // 楽譜を iPhone の幅で描かせてから始める
@@ -513,5 +525,5 @@ try {
     }
   }
 } finally { server.kill('SIGTERM'); }
-console.log(`${process.argv.includes('--shots') ? '撮影' : '11項目（Iは2調）'} 中 NG ${failures.length}`);
+console.log(`${process.argv.includes('--shots') ? '撮影' : '12項目（Iは2調）'} 中 NG ${failures.length}`);
 if (failures.length) process.exitCode = 1;

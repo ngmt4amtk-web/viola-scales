@@ -58,7 +58,7 @@ export function buildScale(form,letter,alter){
   const semis=(up?F.up:F.down)[degIn]+12*oct;
   const midi=tonicMidi+semis,dia=tonicDia+deg,l=dia%7;
   const al=midi-(Math.floor(dia/7)+1)*12-LETTER_PC[l];
-  const f=(up?fing.up:fing.down)[deg]; // 下行は上行の道を戻る（旋律的短音階は自然的短音階の道）
+  const f=(up?fing.up:fing.down)[deg]; // 上行と下行は別の表（下行は開放弦の音を下の弦の4で取る。旋律的短音階の下行は自然的短音階の音）
   notes.push({index:i,dir:up?'up':'down',degree:degIn+1,midi,dia,letter:l,alter:al,octave:Math.floor(dia/7),
    name:noteName(l,al),nameEn:noteNameEn(l,al,Math.floor(dia/7)),string:f.s,finger:f.f,position:f.p,key});
  }
@@ -73,7 +73,7 @@ export function targetFor(note,{a4=442,difficulty='easy'}={}){
 
 // 運指が楽器の上で届くか。C・G・D線と A線の最初の組は、そのポジションで各指が届く半音の範囲。
 // A線で移動した後の組は、組の1の指から見た幅。tools/gen_fingerings.mjs と同じ物差し。
-const RANGE1={1:[1,2],2:[2,4],3:[4,6],4:[5,7]};
+const RANGE1={1:[1,3],2:[2,4],3:[4,6],4:[5,7]}; // 1の+3は増2度の上の「高い1」（例 嬰ハ和声的短音階のA線のシ♯）
 const OFF={1:[0],2:[1,2,3],3:[2,3,4,5],4:[4,5,6]};
 export function checkReach(notes){
  const errs=[];const base=notes.find(n=>n.finger!==0)?.position??1;

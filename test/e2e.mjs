@@ -328,6 +328,7 @@ try {
       if (scenario.tempo) { await checkTempo(cdp); continue; }
       if (scenario.natural) { await checkNatural(cdp, natural); continue; }
       if (scenario.tonic) await cdp.evaluate(`document.querySelector('[data-tonic="${scenario.tonic}"][data-alter="0"]').click()`);
+      if (scenario.name === 'A') await cdp.call('Emulation.setDeviceMetricsOverride', {width:390,height:844,deviceScaleFactor:1,mobile:false}); // 楽譜を iPhone の幅で描かせてから始める
       await cdp.evaluate('document.querySelector("#start").click()');
       if (scenario.name === 'A') {
         await waitFor(() => cdp.evaluate(`(() => {
@@ -335,8 +336,39 @@ try {
           return phase?.textContent.includes('お手本（聴く）') &&
             phase.querySelector('.beat')?.textContent.match(/[●○]/g)?.length === 4;
         })()`), 2400);
-        await waitFor(() => cdp.evaluate('document.querySelector("#phase")?.textContent.includes("お手本のあとに弾いてください")'), 3200);
-        await waitFor(() => cdp.evaluate('document.querySelector("#phase")?.textContent.includes("測っています")'), 2200);
+      }
+      if (scenario.name === 'A' || scenario.name === 'B') {
+        await cdp.call('Page.enable');
+        await cdp.call('Emulation.setDeviceMetricsOverride', {width:390,height:844,deviceScaleFactor:1,mobile:false});
+        await waitFor(() => cdp.evaluate('window.__viola.phase === "listening"'));
+        if (scenario.name === 'A') {
+          const switching = await cdp.evaluate(`(() => {
+            const before = {index:__viola.index,phase:__viola.phase};
+            document.querySelector('[data-view="score"]').click();
+            const score = {index:__viola.index,phase:__viola.phase,ring:!!document.querySelector('#performance-score [data-current]')};
+            document.querySelector('[data-view="detail"]').click();
+            return {before,score,after:{index:__viola.index,phase:__viola.phase},hidden:getComputedStyle(document.querySelector('.full-score')).display==='none'};
+          })()`);
+          deepEqual({index:switching.score.index,phase:switching.score.phase},switching.before);
+          deepEqual(switching.after,switching.before);ok(switching.score.ring && switching.hidden);
+          console.log('場合K 合格 切り替え中も状態維持・現在音の輪・詳細画面で楽譜非表示');
+          await mkdir(join(root,'shots'),{recursive:true});
+          async function shot(name) {const {data}=await cdp.call('Page.captureScreenshot',{format:'png'});await writeFile(join(root,'shots',name),Buffer.from(data,'base64'));}
+          await cdp.evaluate('window.scrollTo(0,0)');await shot('r5_detail.png');
+          await cdp.evaluate(`document.querySelector('[data-view="score"]').click(); window.scrollTo(0,0)`);await shot('r5_score.png');
+          await cdp.evaluate(`document.querySelector('[data-view="detail"]').click(); window.scrollTo(0,0)`);
+        }
+        await waitFor(() => cdp.evaluate(`document.querySelector('#pitch-status').textContent === '${scenario.name === 'A' ? '合う' : '低め'}'`));
+        await sleep(150);
+        const meter=await waitFor(() => cdp.evaluate(`(() => {
+          const dot=document.querySelector('#pitch-dot'), win=document.querySelector('.target-window');
+          if(!dot.classList.contains('visible'))return null;
+          const d=dot.getBoundingClientRect(),w=win.getBoundingClientRect();
+          return {x:d.x+d.width/2,left:w.left,right:w.right,color:getComputedStyle(dot).backgroundColor,status:document.querySelector('#pitch-status').textContent};
+        })()`));
+        if(scenario.name==='A') {await waitFor(() => cdp.evaluate('window.__viola.phase === "measuring"'));ok(meter.x>=meter.left&&meter.x<=meter.right);equal(meter.color,'rgb(46, 158, 106)');equal(meter.status,'合う');
+          await cdp.evaluate("document.querySelector('.tuner').scrollIntoView({block:'center'})");const {data}=await cdp.call('Page.captureScreenshot',{format:'png'});await writeFile(join(root,'shots','r5_meter_good.png'),Buffer.from(data,'base64'));
+        } else {ok(meter.x<meter.left);equal(meter.status,'低め');console.log('場合J 合格 目標音は緑で窓内、20¢低い音は窓の左');}
       }
       if (scenario.noise) {
         await waitFor(() => cdp.evaluate('window.__viola.phase === "listening"'));

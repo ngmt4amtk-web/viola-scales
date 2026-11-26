@@ -6,8 +6,8 @@
 - テンポで鳴らす: 設定したテンポで音階を鳴らします（測りません）。
 
 音程の目標は、独奏の旋律の高さ（A から純正5度で数えたピタゴラスの高さ。開放弦は A から純正5度で調弦）です。
-運指は「第1ポジションで弦を渡り、A線はフレッシュの型とされる 1-2-移動-1-2（原典と未照合）」という型で作ったもので、フレッシュ・小野アンナの本の運指を写した物ではありません。
+運指は tools/gen_fingerings.mjs（第2版）が作る表 fingerings.mjs。上行は開放弦（0）、下行は同じ音を下の弦の4で取る（本人の指定）。下の3本は第1ポジション（ホ・ロ長調は第2、嬰ヘ長調は第3）、A線は2オクターブ目の5〜8度を1-2-3-4で取るように移動する。tonebase のビオラ音階ガイドの2オクターブ長調8調と1音ずつ照らしてある（test/sources.test.mjs、資料は research/sources/）。短調とヘ・変イ・変ロ長調の移動の場所は同じ型で決めたもので、本の運指と照らしていない。フレッシュ・小野アンナの本は読めていない。
 
 音声は端末の中だけで処理し、録音・送信しません。楽譜の字形は Bravura（Bravura-OFL.txt）。
 
-検査: `node test/core.test.mjs` / `node test/score.test.mjs` / `node test/e2e.mjs`
+検査: `node test/core.test.mjs` / `node test/score.test.mjs` / `node test/sources.test.mjs` / `node test/fingering_rules.mjs` / `node test/e2e.mjs`

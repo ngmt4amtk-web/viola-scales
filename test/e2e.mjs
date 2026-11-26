@@ -466,7 +466,7 @@ try {
           await cdp.evaluate(`document.querySelector('[data-view="score"]').click(); window.scrollTo(0,0)`);await shot('r5_score.png');
           await cdp.evaluate(`document.querySelector('[data-view="detail"]').click(); window.scrollTo(0,0)`);
         }
-        await waitFor(() => cdp.evaluate(`document.querySelector('#pitch-status').textContent === '${scenario.name === 'A' ? '合う' : '低め'}'`));
+        await waitFor(() => cdp.evaluate(`document.querySelector('#pitch-status').textContent === '${scenario.name === 'A' ? '合う' : '低い'}'`));
         await sleep(150);
         const meter=await waitFor(() => cdp.evaluate(`(() => {
           const dot=document.querySelector('#pitch-dot'), win=document.querySelector('.target-window');
@@ -476,7 +476,7 @@ try {
         })()`));
         if(scenario.name==='A') {await waitFor(() => cdp.evaluate('window.__viola.phase === "measuring"'));ok(meter.x>=meter.left&&meter.x<=meter.right);equal(meter.color,'rgb(46, 158, 106)');equal(meter.status,'合う');
           await cdp.evaluate("document.querySelector('.tuner').scrollIntoView({block:'center'})");const {data}=await cdp.call('Page.captureScreenshot',{format:'png'});await writeFile(join(root,'shots','r5_meter_good.png'),Buffer.from(data,'base64'));
-        } else {ok(meter.x<meter.left);equal(meter.status,'低め');console.log('場合J 合格 目標音は緑で窓内、20¢低い音は窓の左');
+        } else {ok(meter.x<meter.left);equal(meter.status,'低い');equal(await cdp.evaluate("document.querySelector('#pitch-distance').textContent.startsWith('目標まで')"),true,'開放弦（ド3）に指の言葉を出した');console.log('場合J 合格 目標音は緑で窓内、20¢低い音は窓の左');
           await waitFor(() => cdp.evaluate('window.__viola.judgement === "低い"'), 9500);
           await waitFor(() => cdp.evaluate('window.__viola.phase === "reference"'), 4000);
           equal(await cdp.evaluate('window.__viola.index'), 0, '外れた音で先へ進んだ');

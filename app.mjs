@@ -58,7 +58,7 @@ function updateMeter(frequency,target,n,force=false){
  const cents=centsBetween(frequency,target),color=Math.abs(cents)<=DIFFICULTIES[s.difficulty]?'#2e9e6a':Math.abs(cents)<=25?'#e48a2a':'#e04a3a';
  dot.style.left=`${50+Math.max(-50,Math.min(50,cents))}%`;dot.style.transform='translate(-50%,-50%)'; // 幅が変わっても位置が合うよう割合で置く
 if(!dot.classList.contains('visible')){void dot.offsetWidth;dot.classList.add('visible');}dot.style.background=color;dot.style.color=color;
- status.textContent=Math.abs(cents)<=DIFFICULTIES[s.difficulty]?'合う':cents>0?'高め':'低め';status.style.color=color;distance.style.color=color;distance.textContent=`目標まで ${signed(cents)}¢`;
+ const good=Math.abs(cents)<=DIFFICULTIES[s.difficulty];status.textContent=good?'合う':cents>0?'高い':'低い';status.style.color=color;distance.style.color=color;distance.textContent=`${!good&&n.finger!==0?(cents<0?'指を駒の方へ ・ ':'指をうずまきの方へ ・ '):''}目標まで ${signed(cents)}¢`; // 開放弦は指で直せないので指の言葉を出さない
  const midi=Math.round(69+12*Math.log2(frequency/+s.a4)),names=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];note.textContent=`${detectedName(frequency,+s.a4,n.key)} ${names[(midi%12+12)%12]}${Math.floor(midi/12)-1} ・ ${frequency.toFixed(1)} Hz`;
 }
 function showPhase(text){const p=document.querySelector('#phase');if(p)p.innerHTML=micProblem?'マイクが止まりました。もう一度はじめるを押してください <button data-action="restart">はじめる</button>':audioBlocked?'音が止まっています。画面を押すと再開します':text||({reference:'お手本（聴く）',tail:'余韻を待っています',listening:scoreNoRef()?'弾いてください（合うとピロン）':'お手本のあとに弾いてください',measuring:'測っています',countdown:'準備',playing:'演奏中',paused:'一時停止'}[phase]||phase);expose()}

@@ -24,6 +24,15 @@ for(const [form,l,a] of allKeys()){
 }
 console.log(`上行の開放弦の音: 0=${upOpen} それ以外=${upOther}`);
 console.log(`下行の開放弦の音: 下の弦の4=${downStopped} それ以外=${downOpen}`);
+// 旋律的短音階の下行は自然的短音階と同じ音なので、運指も同じでなければならない（12の主音すべて）
+// 例外: 嬰ハ旋律的短音階の15音目（シ4）は、頂上 ド♯5 を取った半ポジションの手のまま 2 で降りる（折り返しで手の形を変えない）
+const MEL_OK=new Set(['melodic-Cs:15']);
+let melBad=0;
+for(const [form,l,a] of allKeys()){if(form!=='melodic')continue;
+ const m=buildScale('melodic',l,a).notes,n=buildScale('natural',l,a).notes;
+ for(let i=15;i<29;i++){const x=m[i],y=n[i];if((x.string!==y.string||x.finger!==y.finger||x.position!==y.position)&&!MEL_OK.has(buildScale('melodic',l,a).id+':'+i)){melBad++;console.log(`NG 旋律的の下行が自然的と違う ${buildScale('melodic',l,a).id} ${i} ${x.nameEn}`);}}}
+console.log(`旋律的短音階の下行＝自然的短音階の下行: 違い ${melBad}`);
+if(melBad)process.exitCode=1;
 const bad=ex.filter(e=>!ALLOW.has(e.split(' ')[0]));
 console.log('例外:\n'+ex.join('\n'));
 if(strict&&bad.length){console.log('許可の無い例外 '+bad.length);process.exit(1);}

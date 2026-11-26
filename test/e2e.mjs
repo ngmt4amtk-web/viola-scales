@@ -5,7 +5,7 @@ import {mkdir, mkdtemp, readFile, writeFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import * as scales from '../scales.mjs';
 import {DIFFICULTIES, centsBetween, detectedName} from '../intonation.mjs';
-import {MIC_LEVELS, PitchDetector} from '../engine.mjs';
+import {MIC_LEVELS, PitchDetector, AUDIO_CUES} from '../engine.mjs';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {createServer} from 'node:net';
@@ -205,7 +205,7 @@ async function checkClockGuard() {
       }
     }
     const sandbox = {
-      ...scales, DIFFICULTIES, centsBetween, detectedName, MIC_LEVELS,
+      ...scales, DIFFICULTIES, centsBetween, detectedName, MIC_LEVELS, AUDIO_CUES,
       AudioEngine: ClockAudio, Microphone: EchoMicrophone, BRAVURA_LICENSE: '',
       renderScore: () => '', renderOne: () => '', URLSearchParams,
       location: {search: '?test=1'}, localStorage: {getItem() {return '{}';}, setItem() {}},
@@ -257,6 +257,80 @@ async function checkClockGuard() {
   console.log('場合G 合格 音時計2.9秒遅延・停止・suspended・同一の読みで手本だけの判定なし、600ms後の弱音は合格');
 }
 
+// 全体の楽譜: 合ったらピロン（success）を鳴らし、お手本なしで次の音を聞く。
+// 弾き手は画面の音が変わってから lag 秒だけ前の音を弾き続け、それから次の音へ移る。スピーカーの音（お手本・ピロン・正しい音）もマイクに入る。
+async function checkScoreFlow({lag = .3, stay = false, flat = 0, store = '{"view":"score"}'} = {}) {
+  const source = (await readFile(join(root, 'app.mjs'), 'utf8'))
+    .replace(/^import .*;\n/gm, '').replace(/\nsetup\(\);\s*$/, '');
+  const notes = scales.buildScale('major', 0, 0).notes;
+  const hzOf = i => scales.targetFor(notes[i], {a4: 442, difficulty: 'easy'}).targetHz;
+  let now = 0, serial = 0, audio, shown = 0, playing = 0, switchAt = 0;
+  const tasks = new Map(), detector = new PitchDetector(44100), buffer = new Float32Array(4096), chimes = [], played = [];
+  const element = {style: {setProperty() {}}, querySelector() {return null;}, querySelectorAll() {return [];}};
+  class ClockAudio {
+    constructor() {audio = this; this.tones = []; this.master = {gain: {value: .8}};}
+    get time() {return now / 1000;}
+    get state() {return 'running';}
+    async init() {}
+    async ensureRunning() {return true;}
+    toneHz(f, d, t, v, kind = 'tone') {this.tones.push({f, d, t, kind}); played.push({f, d, t, kind});}
+    success() {const t = this.time; chimes.push({t, index: sandbox.window.__viola.index}); this.toneHz(988, .14, t, .6, 'chime'); this.toneHz(1319, .33, t + .12, .6, 'chime');}
+    stop() {this.tones = [];}
+    click() {}
+  }
+  class PlayerMicrophone {
+    async start() {return true;}
+    stop() {}
+    read(level) {
+      const index = sandbox.window.__viola.index;
+      if (index !== shown) {shown = index; switchAt = audio.time + lag;}
+      if (!stay && audio.time >= switchAt) playing = Math.min(shown, 28);
+      const f = hzOf(playing) * 2 ** (flat / 1200);
+      for (let i = 0; i < buffer.length; i++) {
+        const t = audio.time - (buffer.length - i) / 44100;
+        let x = .02 * Math.sin(2 * Math.PI * f * t);
+        for (const o of audio.tones) if (t > o.t && t < o.t + o.d) x += .02 * Math.sin(2 * Math.PI * o.f * t);
+        buffer[i] = x;
+      }
+      return detector.detect(buffer, level);
+    }
+  }
+  const sandbox = {
+    ...scales, DIFFICULTIES, centsBetween, detectedName, MIC_LEVELS, AUDIO_CUES,
+    AudioEngine: ClockAudio, Microphone: PlayerMicrophone, BRAVURA_LICENSE: '',
+    renderScore: () => '', renderOne: () => '', URLSearchParams,
+    location: {search: '?test=1'}, localStorage: {getItem() {return store;}, setItem() {}},
+    navigator: {}, window: {},
+    document: {visibilityState: 'visible', addEventListener() {},
+      querySelector(selector) {return selector === '#app' ? {clientWidth: 600, addEventListener() {}} : element;}, querySelectorAll() {return [];}},
+    setTimeout(callback, ms) {tasks.set(++serial, {callback, at: now + ms}); return serial;},
+    clearTimeout(id) {tasks.delete(id);}, setInterval() {return 0;}, clearInterval() {},
+    requestAnimationFrame(callback) {tasks.set(++serial, {callback, at: now + 16}); return serial;},
+    cancelAnimationFrame(id) {tasks.delete(id);}
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(source + `
+    performance = () => expose();
+    showPhase = () => expose();
+    finish = () => {phase = 'finished'; expose();};
+    setup = () => {phase = 'setup'; updateScale(); expose();};
+    setup();
+    window.__results = () => results;`, sandbox);
+  vm.runInContext('paused = false; measure(++run);', sandbox);
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  await flush();
+  const limit = stay ? 12000 : 60000;
+  while (tasks.size) {
+    const [id, task] = [...tasks].sort((a, b) => a[1].at - b[1].at)[0];
+    if (task.at > limit) break;
+    tasks.delete(id); now = task.at; task.callback(); await flush();
+    if (sandbox.window.__viola.phase === 'finished') break;
+  }
+  const results = sandbox.window.__results(), state = sandbox.window.__viola;
+  const references = played.filter(o => o.kind !== 'chime'); // stop() で消えた音も数える
+  return {state, results, chimes, references, now};
+}
+
 async function captureShots(cdp) {
   const dir = join(root, 'shots');
   await mkdir(dir, {recursive: true});
@@ -305,6 +379,23 @@ try {
   ];
   if (!process.argv.includes('--shots')) {
     try {await checkClockGuard();} catch (e) {failures.push('G'); console.error(`場合G NG ${e.stack}`);}
+    try {
+      const go = await checkScoreFlow();
+      equal(go.state.phase, 'finished', `全体の楽譜で最後まで進まない: ${JSON.stringify(go.state)} ${go.now}ms`);
+      equal(go.chimes.length, 29, 'ピロンは合った音ごとに1回');
+      equal(go.references.length, 0, '全体の楽譜（お手本なしの既定）で4拍のお手本を鳴らした');
+      ok(go.results.every(r => r?.first === '合う'), `前の音やピロンを次の音として判定した: ${JSON.stringify(go.results.map(r => r?.first))}`);
+      const gaps = go.chimes.slice(1).map((c, i) => c.t - go.chimes[i].t), slowest = Math.max(...gaps);
+      ok(slowest < 2, `合ってから次の判定まで ${slowest.toFixed(2)}秒（お手本を鳴らしている）`);
+      const still = await checkScoreFlow({stay: true});
+      equal(still.state.index, 1, '前の音を弾き続けても先へ進まない');
+      equal(still.results[1], undefined, '弾き続けた前の音を次の音の外れと判定しない');
+      const miss = await checkScoreFlow({stay: true, flat: -30, store: '{"view":"score","advance":"repeat"}'});
+      equal(miss.state.index, 0, '合うまで同じ音の設定で外れた音が先へ進んだ');
+      equal(miss.results[0].judgement, '低い', `外れた時に鳴る正しい音を演奏として合うと判定した: ${JSON.stringify(miss.results[0])}`);
+      ok(miss.references.length >= 2 && miss.references.every(o => o.d === 1), '全体の楽譜では4拍のお手本でなく、外れた時の正しい音だけを鳴らす');
+      console.log(`場合L 合格 全体の楽譜で29音をお手本なしで進む（1音あたり最長 ${slowest.toFixed(2)}秒）・前の音を弾き続けても次の音を判定しない・外れた時の正しい音を合うと数えない`);
+    } catch (e) {failures.push('L'); console.error(`場合L NG ${e.stack}`);}
   }
   for (const scenario of cases) {
     const path = join(temp, `${scenario.name}.wav`);
@@ -328,6 +419,7 @@ try {
       if (scenario.tempo) { await checkTempo(cdp); continue; }
       if (scenario.natural) { await checkNatural(cdp, natural); continue; }
       if (scenario.tonic) await cdp.evaluate(`document.querySelector('[data-tonic="${scenario.tonic}"][data-alter="0"]').click()`);
+      if (scenario.name === 'B') await cdp.evaluate(`(() => {const x = document.querySelector('[data-setting="advance"]'); x.value = 'repeat'; x.dispatchEvent(new Event('change', {bubbles: true}));})()`); // 設定「合うまで同じ音」
       if (scenario.name === 'A') await cdp.call('Emulation.setDeviceMetricsOverride', {width:390,height:844,deviceScaleFactor:1,mobile:false}); // 楽譜を iPhone の幅で描かせてから始める
       await cdp.evaluate('document.querySelector("#start").click()');
       if (scenario.name === 'A') {
@@ -336,6 +428,10 @@ try {
           return phase?.textContent.includes('お手本（聴く）') &&
             phase.querySelector('.beat')?.textContent.match(/[●○]/g)?.length === 4;
         })()`), 2400);
+        await cdp.evaluate(`document.querySelector('[data-view="score"]').click()`);
+        await waitFor(() => cdp.evaluate('window.__viola.phase === "listening"'), 1200);
+        await cdp.evaluate(`document.querySelector('[data-view="detail"]').click()`);
+        console.log('場合K2 合格 お手本の途中で全体の楽譜へ移ると、お手本を止めてすぐ聞く');
       }
       if (scenario.name === 'A' || scenario.name === 'B') {
         await cdp.call('Page.enable');
@@ -368,7 +464,11 @@ try {
         })()`));
         if(scenario.name==='A') {await waitFor(() => cdp.evaluate('window.__viola.phase === "measuring"'));ok(meter.x>=meter.left&&meter.x<=meter.right);equal(meter.color,'rgb(46, 158, 106)');equal(meter.status,'合う');
           await cdp.evaluate("document.querySelector('.tuner').scrollIntoView({block:'center'})");const {data}=await cdp.call('Page.captureScreenshot',{format:'png'});await writeFile(join(root,'shots','r5_meter_good.png'),Buffer.from(data,'base64'));
-        } else {ok(meter.x<meter.left);equal(meter.status,'低め');console.log('場合J 合格 目標音は緑で窓内、20¢低い音は窓の左');}
+        } else {ok(meter.x<meter.left);equal(meter.status,'低め');console.log('場合J 合格 目標音は緑で窓内、20¢低い音は窓の左');
+          await waitFor(() => cdp.evaluate('window.__viola.judgement === "低い"'), 9500);
+          await waitFor(() => cdp.evaluate('window.__viola.phase === "reference"'), 4000);
+          equal(await cdp.evaluate('window.__viola.index'), 0, '外れた音で先へ進んだ');
+          console.log('場合B2 合格 設定「合うまで同じ音」なら外れた音は先へ進まず、同じ音のお手本からもう一度');}
       }
       if (scenario.noise) {
         await waitFor(() => cdp.evaluate('window.__viola.phase === "listening"'));
@@ -413,5 +513,5 @@ try {
     }
   }
 } finally { server.kill('SIGTERM'); }
-console.log(`${process.argv.includes('--shots') ? '撮影' : '10項目（Iは2調）'} 中 NG ${failures.length}`);
+console.log(`${process.argv.includes('--shots') ? '撮影' : '11項目（Iは2調）'} 中 NG ${failures.length}`);
 if (failures.length) process.exitCode = 1;

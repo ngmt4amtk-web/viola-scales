@@ -1,10 +1,10 @@
 import {buildScale,TONICS,noteName,STRING_COLORS,STRING_NAMES,targetFor,FINGERING_SOURCE} from './scales.mjs';
 import {DIFFICULTIES,centsBetween,detectedName} from './intonation.mjs';
-import {AudioEngine,Microphone,MIC_LEVELS} from './engine.mjs';
+import {AudioEngine,Microphone,MIC_LEVELS,AUDIO_CUES} from './engine.mjs';
 import {BRAVURA_LICENSE} from './glyphs.mjs';
 import {renderScore,renderOne} from './score.mjs';
 MIC_LEVELS.maximum={minRms:.0002,confidence:.6};
-const defaults={form:'major',letter:0,alter:0,mode:'mic',view:'detail',refTempo:100,refBeats:4,tempo:60,beats:1,click:true,difficulty:'easy',sensitivity:'maximum',advance:'next',a4:442,volume:.8,correction:true};
+const defaults={form:'major',letter:0,alter:0,mode:'mic',view:'detail',refTempo:100,refBeats:4,tempo:60,beats:1,click:true,difficulty:'easy',sensitivity:'maximum',advance:'next',scoreRef:'off',a4:442,volume:.8,correction:true};
 let saved={};try{saved=JSON.parse(localStorage.getItem('viola-scales-v1')||'{}')}catch{}let s={...defaults,...saved};
 const app=document.querySelector('#app'),audio=new AudioEngine(),mic=new Microphone(audio),test=new URLSearchParams(location.search).has('test');
 let wakeLock=null,wakeRequest=0,wakePending=0,starting=false,audioBlocked=false,micProblem=false;
@@ -18,7 +18,7 @@ const options=(key,items)=>`<select data-setting="${key}">${items.map(([v,t])=>`
 const row=(label,control)=>`<label class="setting"><span>${label}</span>${control}</label>`;
 function scoreWidth(){return Math.min(688,Math.max(280,app.clientWidth-64))}
 const viewButtons=()=>`<div class="view-buttons" aria-label="画面">${[['detail','1音ずつ詳しく'],['score','全体の楽譜']].map(([v,t])=>`<button data-view="${v}" class="${s.view===v?'selected':''}" aria-pressed="${s.view===v}">${t}</button>`).join('')}</div>`;
-function setup(){phase='setup';expose();updateScale();const letters='CDEFGAB';app.innerHTML=`<header><h1>ビオラ 2オクターブ音階</h1><div class="subtitle">ハ音記号・A=${s.a4}</div></header><section><h2>調を選ぶ</h2><div class="forms">${[['major','長調'],['harmonic','和声的短音階'],['melodic','旋律的短音階'],['natural','自然的短音階']].map(([v,t])=>`<button data-form="${v}" class="${s.form===v?'selected':''}" aria-pressed="${s.form===v}">${t}</button>`).join('')}</div><div class="tonics">${TONICS[s.form==='major'?'major':'minor'].map(([l,a])=>{let i=letters.indexOf(l);return `<button data-tonic="${l}" data-letter="${i}" data-alter="${a}" class="${i==s.letter&&a==s.alter?'selected':''}">${noteName(i,a)}</button>`}).join('')}</div><div class="key-label">${scale.label}</div></section><section><h2>練習の方法</h2><div class="modes"><button data-mode="mic" class="${s.mode==='mic'?'selected':''}">1音ずつ測る<br>（マイク）</button><button data-mode="tempo" class="${s.mode==='tempo'?'selected':''}">テンポで鳴らす<br>（測らない）</button></div><div class="view-setting">画面: ${viewButtons()}</div>${error?`<p class="error">${esc(error)}</p>`:''}</section><section><h2>全体の楽譜</h2><div class="score">${renderScore(scale,{width:scoreWidth()})}</div></section><button id="start" class="primary">はじめる</button><section><h2>設定</h2>${row('お手本のテンポ',`<input type="number" min="30" max="240" data-setting="refTempo" value="${s.refTempo}">`)}${row('お手本の長さ',options('refBeats',[[1,'1拍'],[2,'2拍'],[4,'4拍'],[8,'8拍']]))}${row('テンポで鳴らす速さ',`<input type="number" min="30" max="240" data-setting="tempo" value="${s.tempo}">`)}${row('1音の長さ',options('beats',[[1,'1拍'],[2,'2拍'],[4,'4拍']]))}${row('拍のクリック',options('click',[[true,'オン'],[false,'オフ']]))}${row('合格の幅',options('difficulty',[['easy','緩め ±15¢'],['normal','普通 ±8¢'],['strict','厳しめ ±5¢']]))}${row('マイクの感度',options('sensitivity',[['maximum','最高'],['ultra','とても高め'],['high','高め'],['normal','ふつう']]))}${row('外れた時',options('advance',[['next','次の音へ進む'],['repeat','合うまで同じ音']]))}${row('外れた時の正しい音',options('correction',[[true,'鳴らす'],[false,'鳴らさない']]))}${row('基準のラ',options('a4',[[442,'442 Hz'],[440,'440 Hz']]))}${row('音量',`<input type="range" min="0.2" max="1" step="0.05" data-setting="volume" value="${s.volume}">`)}</section><section class="fine"><h2>この運指について</h2><p>${esc(FINGERING_SOURCE)}</p><p>フレッシュ・小野アンナの本は読めておらず、その運指の写しではありません。照らした楽譜は tonebase のビオラ音階ガイドの2オクターブ長調8調で、開放弦の音（0と4）以外は同じ指です。音程の目標は Answer Tuner と同じ（独奏の旋律＝Aから純正5度で数えたピタゴラスの高さ。開放弦はAから純正5度で調弦）。</p><p>音声は端末の中だけで処理し、録音・送信しません。</p><details><summary>Bravura のライセンス</summary><pre>${esc(BRAVURA_LICENSE)}</pre></details></section>`;}
+function setup(){phase='setup';expose();updateScale();const letters='CDEFGAB';app.innerHTML=`<header><h1>ビオラ 2オクターブ音階</h1><div class="subtitle">ハ音記号・A=${s.a4}</div></header><section><h2>調を選ぶ</h2><div class="forms">${[['major','長調'],['harmonic','和声的短音階'],['melodic','旋律的短音階'],['natural','自然的短音階']].map(([v,t])=>`<button data-form="${v}" class="${s.form===v?'selected':''}" aria-pressed="${s.form===v}">${t}</button>`).join('')}</div><div class="tonics">${TONICS[s.form==='major'?'major':'minor'].map(([l,a])=>{let i=letters.indexOf(l);return `<button data-tonic="${l}" data-letter="${i}" data-alter="${a}" class="${i==s.letter&&a==s.alter?'selected':''}">${noteName(i,a)}</button>`}).join('')}</div><div class="key-label">${scale.label}</div></section><section><h2>練習の方法</h2><div class="modes"><button data-mode="mic" class="${s.mode==='mic'?'selected':''}">1音ずつ測る<br>（マイク）</button><button data-mode="tempo" class="${s.mode==='tempo'?'selected':''}">テンポで鳴らす<br>（測らない）</button></div><div class="view-setting">画面: ${viewButtons()}</div>${error?`<p class="error">${esc(error)}</p>`:''}</section><section><h2>全体の楽譜</h2><div class="score">${renderScore(scale,{width:scoreWidth()})}</div></section><button id="start" class="primary">はじめる</button><section><h2>設定</h2>${row('お手本のテンポ',`<input type="number" min="30" max="240" data-setting="refTempo" value="${s.refTempo}">`)}${row('お手本の長さ',options('refBeats',[[1,'1拍'],[2,'2拍'],[4,'4拍'],[8,'8拍']]))}${row('テンポで鳴らす速さ',`<input type="number" min="30" max="240" data-setting="tempo" value="${s.tempo}">`)}${row('1音の長さ',options('beats',[[1,'1拍'],[2,'2拍'],[4,'4拍']]))}${row('拍のクリック',options('click',[[true,'オン'],[false,'オフ']]))}${row('合格の幅',options('difficulty',[['easy','緩め ±15¢'],['normal','普通 ±8¢'],['strict','厳しめ ±5¢']]))}${row('マイクの感度',options('sensitivity',[['maximum','最高'],['ultra','とても高め'],['high','高め'],['normal','ふつう']]))}${row('外れた時',options('advance',[['next','次の音へ進む'],['repeat','合うまで同じ音']]))}${row('全体の楽譜の時のお手本',options('scoreRef',[['off','鳴らさない（4拍なし）'],['on','最初と外れた時だけ鳴らす']]))}${row('外れた時の正しい音',options('correction',[[true,'鳴らす'],[false,'鳴らさない']]))}${row('基準のラ',options('a4',[[442,'442 Hz'],[440,'440 Hz']]))}${row('音量',`<input type="range" min="0.2" max="1" step="0.05" data-setting="volume" value="${s.volume}">`)}</section><section class="fine"><h2>この運指について</h2><p>${esc(FINGERING_SOURCE)}</p><p>フレッシュ・小野アンナの本は読めておらず、その運指の写しではありません。照らした楽譜は tonebase のビオラ音階ガイドの2オクターブ長調8調で、開放弦の音（0と4）以外は同じ指です。音程の目標は Answer Tuner と同じ（独奏の旋律＝Aから純正5度で数えたピタゴラスの高さ。開放弦はAから純正5度で調弦）。</p><p>音声は端末の中だけで処理し、録音・送信しません。</p><details><summary>Bravura のライセンス</summary><pre>${esc(BRAVURA_LICENSE)}</pre></details></section>`;}
 function performance(){
  const n=scale.notes[index],next=scale.notes[index+1];
  const entering=!document.querySelector('#performance-score');
@@ -61,8 +61,8 @@ if(!dot.classList.contains('visible')){void dot.offsetWidth;dot.classList.add('v
  status.textContent=Math.abs(cents)<=DIFFICULTIES[s.difficulty]?'合う':cents>0?'高め':'低め';status.style.color=color;distance.style.color=color;distance.textContent=`目標まで ${signed(cents)}¢`;
  const midi=Math.round(69+12*Math.log2(frequency/+s.a4)),names=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];note.textContent=`${detectedName(frequency,+s.a4,n.key)} ${names[(midi%12+12)%12]}${Math.floor(midi/12)-1} ・ ${frequency.toFixed(1)} Hz`;
 }
-function showPhase(text){const p=document.querySelector('#phase');if(p)p.innerHTML=micProblem?'マイクが止まりました。もう一度はじめるを押してください <button data-action="restart">はじめる</button>':audioBlocked?'音が止まっています。画面を押すと再開します':text||({reference:'お手本（聴く）',tail:'余韻を待っています',listening:'お手本のあとに弾いてください',measuring:'測っています',countdown:'準備',playing:'演奏中',paused:'一時停止'}[phase]||phase);expose()}
-function finish(){phase='finished';cancelAnimationFrame(raf);mic.stop();audio.stop();releaseWakeLock();expose();app.innerHTML=`<section><h1>おつかれさまでした</h1>${s.mode==='mic'?`<p>${results.filter(r=>r?.judgement==='合う').length} / 29 音が合いました</p><table><thead><tr><th>音名</th><th>指</th><th>測定値</th><th>判定</th></tr></thead><tbody>${scale.notes.map((n,i)=>`<tr><td>${n.name}</td><td>${n.place.short}</td><td>${results[i]?signed(results[i].cents)+'¢':'—'}</td><td>${results[i]?.judgement||'—'}</td></tr>`).join('')}</tbody></table>`:'<p>最後まで鳴らしました。</p>'}<p><button data-action="restart">もう一度</button> <button data-action="back">調を選び直す</button></p></section>`}
+function showPhase(text){const p=document.querySelector('#phase');if(p)p.innerHTML=micProblem?'マイクが止まりました。もう一度はじめるを押してください <button data-action="restart">はじめる</button>':audioBlocked?'音が止まっています。画面を押すと再開します':text||({reference:'お手本（聴く）',tail:'余韻を待っています',listening:scoreNoRef()?'弾いてください（合うとピロン）':'お手本のあとに弾いてください',measuring:'測っています',countdown:'準備',playing:'演奏中',paused:'一時停止'}[phase]||phase);expose()}
+function finish(){phase='finished';cancelAnimationFrame(raf);mic.stop();audio.stop();releaseWakeLock();expose();app.innerHTML=`<section><h1>おつかれさまでした</h1>${s.mode==='mic'?`<p>1回目で合った音 ${results.filter(r=>r?.first==='合う').length} / 29</p><table><thead><tr><th>音名</th><th>指</th><th>測定値</th><th>判定</th></tr></thead><tbody>${scale.notes.map((n,i)=>`<tr><td>${n.name}</td><td>${n.place.short}</td><td>${results[i]?signed(results[i].cents)+'¢':'—'}</td><td>${results[i]?.judgement||'—'}</td></tr>`).join('')}</tbody></table>`:'<p>最後まで鳴らしました。</p>'}<p><button data-action="restart">もう一度</button> <button data-action="back">調を選び直す</button></p></section>`}
 const signed=n=>n>0?'+'+Math.round(n):n<0?'−'+Math.abs(Math.round(n)):'0';
 // A pending request may resolve after pause/back; invalidate it before releasing.
 async function acquireWakeLock(){
@@ -136,14 +136,17 @@ async function start(){
   error='マイクや音声を使えません: '+e.message+'。ブラウザのマイク許可と端末の設定を確認してください。テンポで鳴らすモードは利用できます。';setup();
  }finally{starting=false;controls.forEach(button=>button.disabled=false);}
 }
-async function measure(id){
+// flow: 全体の楽譜でお手本を鳴らさずに聞く時。quiet＝ピロンなどが鳴っている秒（その間と0.1秒は聞かない）、prevHz＝弾き続けている前の音。
+const scoreNoRef=()=>s.view==='score'&&s.scoreRef==='off';
+async function measure(id,flow=null){
+ if(!flow&&scoreNoRef())flow={quiet:0};
  if(id!==run||paused)return;
  if(index>=29){finish();return;}
  const n=scale.notes[index],target=targetFor(n,{a4:+s.a4,difficulty:s.difficulty}).targetHz;
  updateMeter(null,target,n,true);
- audio.stop();
- const dur=60/Math.max(30,+s.refTempo)*+s.refBeats,at=audio.time,readyAt=at+dur+.35;
- phase='reference';performance();audio.toneHz(target,dur,at,.65);
+ if(!flow?.keep)audio.stop(); // 合った直後はピロンを切らない
+ const dur=flow?flow.quiet:60/Math.max(30,+s.refTempo)*+s.refBeats,at=audio.time,readyAt=at+dur+(flow?.1:.35);
+ phase=flow?'listening':'reference';performance();if(!flow)audio.toneHz(target,dur,at,.65);
  let tail=[],previous=null;
  const reading=()=>{
   const r=mic.read(s.sensitivity),fresh=!previous||r.rms!==previous.rms||r.frequency!==previous.frequency;
@@ -155,7 +158,8 @@ async function measure(id){
   if(audio.state==='running'){
    audioBlocked=false;
    const t=audio.time,{r,fresh}=reading();
-   if(t>=at+dur){phase='tail';showPhase();if(t>=readyAt-.15&&fresh)tail.push(r.rms);}
+   if(flow){}
+   else if(t>=at+dur){phase='tail';showPhase();if(t>=readyAt-.15&&fresh)tail.push(r.rms);}
    else{
     const beat=Math.min(+s.refBeats,Math.floor((t-at)/(60/+s.refTempo))+1);
     showPhase(`お手本（聴く） <span class="beat">${Array.from({length:+s.refBeats},(_,i)=>i+1===beat?'●':'○').join(' ')}</span>`);
@@ -166,10 +170,12 @@ async function measure(id){
  if(id!==run||paused)return;
  const baseline=tail.reduce((a,b)=>a+b,0)/Math.max(1,tail.length);
  phase='listening';showPhase();
- let since=null,onset=null,samples=[],cfg=MIC_LEVELS[s.sensitivity];
+ let since=null,onset=null,samples=[],cfg=MIC_LEVELS[s.sensitivity],guardHz=flow?.prevHz??null,quietSince=null;
  while(id===run&&!paused){
   const now=audio.time*1000,{r,fresh}=reading();
-  const valid=fresh&&r.frequency&&r.rms>=cfg.minRms&&r.confidence>=cfg.confidence;
+  let valid=fresh&&r.frequency&&r.rms>=cfg.minRms&&r.confidence>=cfg.confidence;
+  // 前の音を弾き続けている間は、次の音として測らない。高さが前の音から50¢（次の音との中ほど）離れるか、音が150ms切れたら見張りを外す
+  if(guardHz){if(fresh&&r.rms<cfg.minRms){quietSince??=now;if(now-quietSince>=150)guardHz=null;}else{quietSince=null;if(valid&&Math.abs(centsBetween(r.frequency,guardHz))>=50)guardHz=null;}if(guardHz)valid=false;}
   if(test)window.__viola.reading=r;
   if(audio.state!=='running'){audioBlocked=true;showPhase();}
   else if(audioBlocked){audioBlocked=false;showPhase();}
@@ -183,7 +189,8 @@ async function measure(id){
    else since=null;
   }else if(now-onset>=150&&now-onset<=850&&valid)samples.push(centsBetween(r.frequency,target));
   if(onset!==null&&now-onset>850){if(samples.length){samples.sort((a,b)=>a-b);lastCents=samples[Math.floor(samples.length/2)];updateMeter(target*Math.pow(2,lastCents/1200),target,n); // 計器も判定と同じ中央値にそろえる
-judgement=Math.abs(lastCents)<=DIFFICULTIES[s.difficulty]?'合う':lastCents>0?'高い':'低い';results[index]={cents:lastCents,judgement};phase='result';let heard=Math.abs(lastCents)>=50&&Math.round(12*Math.log2(target*Math.pow(2,lastCents/1200)/+s.a4))!==Math.round(12*Math.log2(target/+s.a4))?` ${detectedName(target*Math.pow(2,lastCents/1200),+s.a4,n.key)}に聞こえる`:'';showPhase(`<span class="${judgement==='合う'?'result-good':'result-bad'}">${judgement==='合う'?'✓ ':''}${judgement} ${signed(lastCents)}¢${heard}</span>`);if(judgement!=='合う'&&s.correction)audio.toneHz(target,1,audio.time,.65);if(!await wait(1200,id))return;if(judgement==='合う'||s.advance==='next')index++;measure(id);return}onset=null;since=null;phase='listening';showPhase()}if(!await wait(25,id))return}
+judgement=Math.abs(lastCents)<=DIFFICULTIES[s.difficulty]?'合う':lastCents>0?'高い':'低い';results[index]={cents:lastCents,judgement,first:results[index]?.first??judgement};phase='result';let heard=Math.abs(lastCents)>=50&&Math.round(12*Math.log2(target*Math.pow(2,lastCents/1200)/+s.a4))!==Math.round(12*Math.log2(target/+s.a4))?` ${detectedName(target*Math.pow(2,lastCents/1200),+s.a4,n.key)}に聞こえる`:'';const heardHz=target*Math.pow(2,lastCents/1200);if(judgement==='合う'&&s.view==='score'){index++;if(index>=29){finish();audio.success();return}audio.success();measure(id,{prevHz:heardHz,quiet:AUDIO_CUES.success.duration,keep:true});return} // 全体の楽譜: ピロンを鳴らして間を置かず次の音へ
+showPhase(`<span class="${judgement==='合う'?'result-good':'result-bad'}">${judgement==='合う'?'✓ ':''}${judgement} ${signed(lastCents)}¢${heard}</span>`);if(judgement!=='合う'&&s.correction)audio.toneHz(target,1,audio.time,.65);if(!await wait(1200,id))return;const moved=judgement==='合う'||s.advance==='next';if(moved)index++;measure(id,scoreNoRef()?{prevHz:moved?heardHz:null,quiet:.25}:null);return}onset=null;since=null;phase='listening';showPhase()}if(!await wait(25,id))return}
 }
 function tempoRun(id,count){
  cancelAnimationFrame(raf);
@@ -228,7 +235,7 @@ app.addEventListener('click',e=>{
  if(t.dataset.form){s.form=t.dataset.form;const ts=TONICS[s.form==='major'?'major':'minor'];if(!ts.some(([l,a])=>'CDEFGAB'.indexOf(l)==s.letter&&a==s.alter)){s.letter=0;s.alter=0}save();setup();}
  else if(t.dataset.tonic){s.letter=+t.dataset.letter;s.alter=+t.dataset.alter;save();setup();}
  else if(t.dataset.mode){s.mode=t.dataset.mode;save();setup();}
- else if(t.dataset.view){s.view=t.dataset.view;save();const practice=document.querySelector('.practice');if(practice){practice.classList.toggle('view-detail',s.view==='detail');practice.classList.toggle('view-score',s.view==='score');practice.querySelectorAll('[data-view]').forEach(b=>{b.classList.toggle('selected',b.dataset.view===s.view);b.setAttribute('aria-pressed',b.dataset.view===s.view)});if(s.view==='score')document.querySelector('[data-current]')?.closest('svg')?.scrollIntoView({block:'center'});}else setup();}
+ else if(t.dataset.view){s.view=t.dataset.view;save();const practice=document.querySelector('.practice');if(practice){practice.classList.toggle('view-detail',s.view==='detail');practice.classList.toggle('view-score',s.view==='score');practice.querySelectorAll('[data-view]').forEach(b=>{b.classList.toggle('selected',b.dataset.view===s.view);b.setAttribute('aria-pressed',b.dataset.view===s.view)});if(s.view==='score')document.querySelector('[data-current]')?.closest('svg')?.scrollIntoView({block:'center'});if(s.mode==='mic'&&!paused&&['reference','tail'].includes(phase)&&scoreNoRef()){++run;audio.stop();resumePractice(run,false);}}else setup();} // お手本の途中で全体の楽譜へ移ったら、お手本を止めて同じ音をすぐ聞く
  else if(t.id==='start')start();
  else if(t.dataset.action){
   const a=t.dataset.action;++run;cancelAnimationFrame(raf);audio.stop();releaseWakeLock();
